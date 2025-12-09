@@ -218,6 +218,14 @@ const WHISPER_MODELS = [
   "large", "large-v1", "large-v2", "large-v3"
 ];
 
+const MLX_MODELS = [
+  "mlx-community/whisper-large-v3-mlx",
+  "mlx-community/whisper-large-v3-turbo",
+  "mlx-community/whisper-large-v3-mlx-8bit",
+  "mlx-community/whisper-large-v3-mlx-4bit",
+  "mlx-community/whisper-base-mlx"
+];
+
 const LANGUAGES = [
   { value: "auto", label: "Auto-detect" },
   { value: "en", label: "English" },
@@ -436,6 +444,11 @@ export const TranscriptionConfigDialog = memo(function TranscriptionConfigDialog
         newParams.diarize_model = 'pyannote';
       }
 
+      // If switching to MLX, set a default model
+      if (key === 'model_family' && value === 'mlx_whisper') {
+        newParams.model = 'mlx-community/whisper-large-v3-mlx';
+      }
+
       return newParams;
     });
   };
@@ -513,6 +526,9 @@ export const TranscriptionConfigDialog = memo(function TranscriptionConfigDialog
                 <SelectItem value="whisper" className="text-carbon-900 dark:text-carbon-100 focus:bg-carbon-100 dark:focus:bg-carbon-700">
                   Whisper (OpenAI)
                 </SelectItem>
+                <SelectItem value="mlx_whisper" className="text-carbon-900 dark:text-carbon-100 focus:bg-carbon-100 dark:focus:bg-carbon-700">
+                  Apple MLX (macOS)
+                </SelectItem>
                 <SelectItem value="nvidia_parakeet" className="text-carbon-900 dark:text-carbon-100 focus:bg-carbon-100 dark:focus:bg-carbon-700">
                   NVIDIA Parakeet
                 </SelectItem>
@@ -527,7 +543,64 @@ export const TranscriptionConfigDialog = memo(function TranscriptionConfigDialog
           </div>
         </div>
 
-        {params.model_family === "nvidia_parakeet" ? (
+        {params.model_family === "mlx_whisper" ? (
+          <div className="space-y-6">
+            <div className="p-4 border border-blue-200 dark:border-blue-700 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+              <div className="flex items-center gap-2">
+                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Apple Silicon Optimized</span>
+              </div>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                Runs locally on your Mac using the Neural Engine. High performance and low memory usage.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="mlx_model" className="text-carbon-700 dark:text-carbon-300 font-medium">
+                Model
+              </Label>
+              <Select
+                value={params.model}
+                onValueChange={(value) => updateParam('model', value)}
+              >
+                <SelectTrigger className="bg-white dark:bg-carbon-800 border-carbon-300 dark:border-carbon-600 text-carbon-900 dark:text-carbon-100">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white dark:bg-carbon-800 border-carbon-200 dark:border-carbon-700">
+                  {MLX_MODELS.map((model) => (
+                    <SelectItem key={model} value={model} className="text-carbon-900 dark:text-carbon-100 focus:bg-carbon-100 dark:focus:bg-carbon-700">
+                      {model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-carbon-500 dark:text-carbon-400">
+                Models ending in -4bit or -8bit use less memory but may be slightly less accurate.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="mlx_language" className="text-carbon-700 dark:text-carbon-300 font-medium">
+                Language
+              </Label>
+              <Select
+                value={params.language || "auto"}
+                onValueChange={(value) => updateParam('language', value === "auto" ? undefined : value)}
+              >
+                <SelectTrigger className="bg-white dark:bg-carbon-800 border-carbon-300 dark:border-carbon-600 text-carbon-900 dark:text-carbon-100">
+                  <SelectValue placeholder="Auto-detect" />
+                </SelectTrigger>
+                <SelectContent className="bg-white dark:bg-carbon-800 border-carbon-200 dark:border-carbon-700 max-h-60">
+                  {LANGUAGES.map((lang) => (
+                    <SelectItem key={lang.value} value={lang.value} className="text-carbon-900 dark:text-carbon-100 focus:bg-carbon-100 dark:focus:bg-carbon-700">
+                      {lang.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : params.model_family === "nvidia_parakeet" ? (
           <div className="space-y-6">
 
             {/* Multi-track status for Parakeet */}
