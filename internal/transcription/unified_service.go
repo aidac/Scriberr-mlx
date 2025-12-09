@@ -79,7 +79,6 @@ func (u *UnifiedTranscriptionService) ProcessJob(ctx context.Context, jobID stri
 	logger.Info("Processing job with unified service", "job_id", jobID)
 
 	// Get the job from database
-	// Get the job from database
 	job, err := u.jobRepo.FindWithAssociations(ctx, jobID)
 	if err != nil {
 		return fmt.Errorf("failed to get job: %w", err)
@@ -339,6 +338,8 @@ func (u *UnifiedTranscriptionService) selectModels(params models.WhisperXParams)
 		transcriptionModelID = "whisperx"
 	case "openai":
 		transcriptionModelID = "openai_whisper"
+	case "mlx_whisper":
+		transcriptionModelID = "mlx_whisper"
 	default:
 		transcriptionModelID = "whisperx" // Default fallback
 	}
@@ -514,6 +515,8 @@ func (u *UnifiedTranscriptionService) convertParametersForModel(params models.Wh
 		return u.convertToSortformerParams(params)
 	case "openai_whisper":
 		return u.convertToOpenAIParams(params)
+	case "mlx_whisper":
+		return u.parametersToMap(params)
 	default:
 		// Fallback to legacy conversion
 		return u.parametersToMap(params)
