@@ -100,7 +100,6 @@ func (m *MLXAdapter) PrepareEnvironment(ctx context.Context) error {
 	// Check if pyproject.toml exists to avoid re-initializing
 	if _, err := os.Stat(filepath.Join(mlxPath, "pyproject.toml")); os.IsNotExist(err) {
 		// Initialize UV project with a specific name to avoid shadowing 'mlx' package
-		// The directory is named 'MLX', so default 'uv init' creates a package named 'mlx', causing conflict.
 		initCmd := exec.Command("uv", "init", "--name", "scriberr-mlx-wrapper")
 		initCmd.Dir = mlxPath
 		if out, err := initCmd.CombinedOutput(); err != nil {
@@ -109,7 +108,6 @@ func (m *MLXAdapter) PrepareEnvironment(ctx context.Context) error {
 	}
 
 	// Install dependencies
-	// Note: We install ffmpeg-python to ensure audio handling works if MLX needs it internally
 	installCmd := exec.Command("uv", "add", "mlx-whisper", "ffmpeg-python")
 	installCmd.Dir = mlxPath
 	if out, err := installCmd.CombinedOutput(); err != nil {
@@ -135,7 +133,7 @@ func (m *MLXAdapter) Transcribe(ctx context.Context, input interfaces.AudioInput
 	}
 	defer m.CleanupTempDirectory(tempDir)
 
-	// We'll write a small Python script to run the transcription because MLX CLI might not output the exact JSON format we want
+	// Create the Python script
 	scriptPath := filepath.Join(tempDir, "transcribe_mlx.py")
 	scriptContent := m.generatePythonScript()
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0644); err != nil {
@@ -182,7 +180,7 @@ func (m *MLXAdapter) parseResult(jsonPath string, params map[string]interface{})
 	}
 
 	if err := json.Unmarshal(data, &mlxOutput); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse MLX output: %w", err)
 	}
 
 	// Convert to standard interface
@@ -205,11 +203,24 @@ func (m *MLXAdapter) parseResult(jsonPath string, params map[string]interface{})
 }
 
 // Helper: Python script to bridge MLX and our JSON format
+// We include clean_obj to handle NaN/Infinity values which crash Go's JSON parser
 func (m *MLXAdapter) generatePythonScript() string {
 	return `
 import argparse
 import json
 import mlx_whisper
+import math
+
+def clean_obj(obj):
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    elif isinstance(obj, dict):
+        return {k: clean_obj(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_obj(v) for v in obj]
+    return obj
 
 def main():
     parser = argparse.ArgumentParser()
@@ -219,13 +230,16 @@ def main():
     args = parser.parse_args()
 
     print(f"Loading model {args.model}...")
-    # Transcribe using mlx_whisper
-    # word_timestamps=True is supported by MLX for cleaner alignment
+    
+    # Transcribe
     result = mlx_whisper.transcribe(
         args.audio, 
         path_or_hf_repo=args.model,
         word_timestamps=True
     )
+
+    # Clean NaNs/Infs which cause JSON errors in Go/other parsers
+    result = clean_obj(result)
 
     # Save to JSON
     with open(args.output, "w") as f:
@@ -238,7 +252,5 @@ if __name__ == "__main__":
 
 // Auto-register
 func init() {
-	// We assume the data directory for envs is passed down or configured globally.
-	// In the real app, you might inject the path. For now, we use a relative default.
 	registry.RegisterTranscriptionAdapter("mlx_whisper", NewMLXAdapter("./data/mlx-env"))
 }
